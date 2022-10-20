@@ -75,7 +75,7 @@ int createIndexArray(FILE *data, index_st *indexArray) {
   return num_register;
 }
 
-int compareKeys(index_st index1, index_st index2) { //Teste se index1.key > index2.key
+int greater_than_key(index_st index1, index_st index2) { //Teste se index1.key > index2.key
   for(int i=0;i<19;i++) {
     if(index1.key[i] == '|')
       continue;
@@ -101,10 +101,10 @@ void quick_sort(index_st *indexArray, int left, int right) {
   x = indexArray[(left + right) / 2];
      
   while(i <= j) {
-    while(compareKeys(x, indexArray[i]) && i < right) {
+    while(greater_than_key(x, indexArray[i]) && i < right) {
       i++;
     }
-    while(compareKeys(indexArray[j], x) && j > left) {
+    while(greater_than_key(indexArray[j], x) && j > left) {
       j--;
     }
     if(i <= j) {
@@ -132,6 +132,29 @@ void pushRegisterInArray(index_st *indexArray, veic_t insert_register, int num_r
 
   strcpy(indexArray[num_register].key, key);
   indexArray[num_register].byteOffset = position;
+}
+
+int binary_search(index_st *indexArray, reg_id_t reg_id, int begin, int end) {
+  int i = (begin + end)/2;
+  char key[19];
+  index_st searchedRegister;
+
+  sprintf(key, "%s|%s", reg_id.cod_cli, reg_id.cod_vei);
+  strcpy(searchedRegister.key, key);
+
+  if(begin > end) {
+    return 0; //registro nao encontrado
+  }
+
+  if(!strcmp(indexArray[i].key, key)) {
+    return indexArray[i].byteOffset;
+  }
+
+  if(greater_than_key(searchedRegister, indexArray[i])) {
+    return binary_search(indexArray, reg_id, i+1, end);
+  } else {
+    return binary_search(indexArray, reg_id, begin, i-1);
+  }
 }
 
 void insert(FILE *data, veic_t *regs_locs_vei, index_st *indexArray, int *num_register) {
@@ -181,12 +204,41 @@ void insert(FILE *data, veic_t *regs_locs_vei, index_st *indexArray, int *num_re
   return;
 }
 
+int fetch_register(FILE *data, index_st *indexArray, reg_id_t *regs_id_list, int num_register) {
+  int option, byteOffset;
+
+  printf("\n=================================\n");
+  printf("Digite o numero da opcao que deseja buscar baseado em sua chave de busca:\n\n");
+
+  for(int i=0; i<SIZE_IDLIST; i++) {
+    printf("%d- ", i+1);
+    printf("cod_cli: %s cod_vei: %s\n", regs_id_list[i].cod_cli, regs_id_list[i].cod_vei);
+  }
+  scanf("%d", &option);
+  clearBuffer();
+
+  while((option < 1) || (option > SIZE_IDLIST)) {
+    printf("Opcao invalida, por favor digite novamente: ");
+    scanf("%d", &option);
+    clearBuffer();
+  }
+  option--;
+
+  if(!(byteOffset = binary_search(indexArray, regs_id_list[option], 0, num_register-1))){
+    printf("Registro nao encontrado\n");
+    return -1;
+  }
+
+  return byteOffset;
+}
+
 int main() {
   veic_t regs_locs_vei[SIZE_INSERT]; //armazena os registros para serem inseridos
   reg_id_t regs_id_list[SIZE_IDLIST]; //armazena os registros para serem buscados
   FILE *data;
   index_st indexArray[25];
   int option, num_register;
+  char reg_size;
 
   if(!(loadFiles(regs_locs_vei, regs_id_list))) { // chama loadFiles para carregar na memoria os arquivos insere.bin e remove.bin
     printf("Nao foi possivel carregar os arquivos");
@@ -228,7 +280,16 @@ int main() {
       break;
     }
     case 2: {
-      /* code */
+      int byteOffset = fetch_register(data, indexArray, regs_id_list, num_register);
+      if(byteOffset != -1 ){
+        fseek(data, byteOffset, SEEK_SET);
+        fread(&reg_size, sizeof(char), 1, data);
+        char searchedRegister[int(reg_size)];
+        fread(searchedRegister, sizeof(char), reg_size, data);
+        searchedRegister[reg_size-1] = '\0';
+        
+        printf("Registro encontrado: %s \n\n", searchedRegister);
+      }
       break;
     }
     case 3: {
