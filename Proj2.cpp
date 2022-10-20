@@ -124,8 +124,18 @@ void quick_sort(index_st *indexArray, int left, int right) {
   }
 }
 
-void insert(FILE *data, veic_t *regs_locs_vei) {
-  int option, reg_size;
+void pushRegisterInArray(index_st *indexArray, veic_t insert_register, int num_register, int position) {  //Adiciona um novo registro no fim do array
+  char key[19];
+  
+  sprintf(key, "%s|%s", insert_register.cod_cli, insert_register.cod_vei);
+  key[19] = '\0';
+
+  strcpy(indexArray[num_register].key, key);
+  indexArray[num_register].byteOffset = position;
+}
+
+void insert(FILE *data, veic_t *regs_locs_vei, index_st *indexArray, int *num_register) {
+  int option, reg_size, position=0;
   char insert_register[124], ch;
 
   printf("\n=================================\n");
@@ -151,14 +161,21 @@ void insert(FILE *data, veic_t *regs_locs_vei) {
     scanf("%d", &option);
     clearBuffer();
   }
-  option--;
+  option--;            
   
   sprintf(insert_register, "%s|%s|%s|%s|%s|", regs_locs_vei[option].cod_cli, regs_locs_vei[option].cod_vei, regs_locs_vei[option].client, regs_locs_vei[option].veiculo, regs_locs_vei[option].dias);
   reg_size = strlen(insert_register);
 
-  while(fread(&ch, sizeof(char), 1, data)); //posiciona no fim do arquivo
+  rewind(data);
+  while(fread(&ch, sizeof(char), 1, data)){ //posiciona no fim do arquivo
+    position++;
+  }
   fwrite(&reg_size, sizeof(char), 1, data);
   fwrite(insert_register, sizeof(char), reg_size, data); //insere o registro no fim do arquivo
+
+  printf("position:%d \n", position);
+  pushRegisterInArray(indexArray, regs_locs_vei[option], *num_register, position);
+  (*num_register)++;
 
   strcpy(regs_locs_vei[option].cod_cli, "***"); //adiciona marcador no campo cod_cli para indicar que o registro ja foi inserido
   return;
@@ -191,16 +208,8 @@ int main() {
 
   num_register = createIndexArray(data, indexArray); //Cria o index na memoria principal, a partir do arquivo de dados
 
-  for (int i = 0; i < num_register; i++) {
-    printf("%s %d\n", indexArray[i].key, indexArray[i].byteOffset);
-  }
-
   printf("\n\n");
   quick_sort(indexArray, 0, num_register-1); //Organiza em ordem crescente
-  
-  for (int i = 0; i < num_register; i++) {
-    printf("%s %d\n", indexArray[i].key, indexArray[i].byteOffset);
-  }
 
   //Menu de opcoes:
   do {
@@ -214,7 +223,8 @@ int main() {
 
     switch (option) {
     case 1: {
-      insert(data, regs_locs_vei); //insere registros no fim do arquivo
+      insert(data, regs_locs_vei, indexArray, &num_register); //insere registros no fim do arquivo
+      quick_sort(indexArray, 0, num_register-1);
       break;
     }
     case 2: {
