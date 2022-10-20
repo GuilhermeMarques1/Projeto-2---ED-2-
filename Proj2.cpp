@@ -26,6 +26,10 @@ typedef struct remove {
   char cod_vei[8];
 } reg_id_t;
 
+typedef struct index_struct {
+  char key[19];
+  int byteOffset;
+} index_st;
 
 int loadFiles(veic_t *regs_locs_vei, reg_id_t *regs_id_list) {
   FILE *insere, *busca;
@@ -45,12 +49,79 @@ int loadFiles(veic_t *regs_locs_vei, reg_id_t *regs_id_list) {
   }
 
   for(int i=0; i<SIZE_IDLIST; i++) {
-    fread(&(regs_id_list[i]), sizeof(reg_id_t), 1, busca);
+    fread(&(regs_id_list[i]), sizeof(reg_id_t), 1 , busca);
   }
 
   fclose(insere);
   fclose(busca);
   return 1;
+}
+
+int createIndexArray(FILE *data, index_st *indexArray) {
+  char ch, reg_size, cod_cli[11], cod_vei[7];
+  int position=0, i=0, num_register=0;
+
+  while(fread(&reg_size, sizeof(char), 1, data)) {
+    fread(&(indexArray[i].key), sizeof(indexArray->key), 1, data);
+    indexArray[i].key[19] = '\0';
+    indexArray[i].byteOffset = position;
+    num_register++;
+
+    position += reg_size+1;
+    fseek(data, position, SEEK_SET);
+    i++;
+  }
+
+  return num_register;
+}
+
+int compareKeys(index_st index1, index_st index2) { //Teste se index1.key > index2.key
+  for(int i=0;i<19;i++) {
+    if(index1.key[i] == '|')
+      continue;
+
+    if(int(index1.key[i]) > int(index2.key[i])) {
+      return 1;
+    }
+
+    if(int(index1.key[i]) < int(index2.key[i])) {
+      return 0;
+    }
+  }
+
+  return 0;
+}
+
+void quick_sort(index_st *indexArray, int left, int right) {
+  int i, j;
+  index_st x, y;
+     
+  i = left;
+  j = right;
+  x = indexArray[(left + right) / 2];
+     
+  while(i <= j) {
+    while(compareKeys(x, indexArray[i]) && i < right) {
+      i++;
+    }
+    while(compareKeys(indexArray[j], x) && j > left) {
+      j--;
+    }
+    if(i <= j) {
+      y = indexArray[i];
+      indexArray[i] = indexArray[j];
+      indexArray[j] = y;
+      i++;
+      j--;
+    }
+  }
+  
+  if(j > left) {
+    quick_sort(indexArray, left, j);
+  }
+  if(i < right) {
+    quick_sort(indexArray, i, right);
+  }
 }
 
 void insert(FILE *data, veic_t *regs_locs_vei) {
@@ -86,6 +157,7 @@ void insert(FILE *data, veic_t *regs_locs_vei) {
   reg_size = strlen(insert_register);
 
   while(fread(&ch, sizeof(char), 1, data)); //posiciona no fim do arquivo
+  fwrite(&reg_size, sizeof(char), 1, data);
   fwrite(insert_register, sizeof(char), reg_size, data); //insere o registro no fim do arquivo
 
   strcpy(regs_locs_vei[option].cod_cli, "***"); //adiciona marcador no campo cod_cli para indicar que o registro ja foi inserido
@@ -95,8 +167,9 @@ void insert(FILE *data, veic_t *regs_locs_vei) {
 int main() {
   veic_t regs_locs_vei[SIZE_INSERT]; //armazena os registros para serem inseridos
   reg_id_t regs_id_list[SIZE_IDLIST]; //armazena os registros para serem buscados
-  FILE *data; 
-  int option;
+  FILE *data;
+  index_st indexArray[25];
+  int option, num_register;
 
   if(!(loadFiles(regs_locs_vei, regs_id_list))) { // chama loadFiles para carregar na memoria os arquivos insere.bin e remove.bin
     printf("Nao foi possivel carregar os arquivos");
@@ -116,12 +189,25 @@ int main() {
     }
   }
 
+  num_register = createIndexArray(data, indexArray); //Cria o index na memoria principal, a partir do arquivo de dados
+
+  for (int i = 0; i < num_register; i++) {
+    printf("%s %d\n", indexArray[i].key, indexArray[i].byteOffset);
+  }
+
+  printf("\n\n");
+  quick_sort(indexArray, 0, num_register-1); //Organiza em ordem crescente
+  
+  for (int i = 0; i < num_register; i++) {
+    printf("%s %d\n", indexArray[i].key, indexArray[i].byteOffset);
+  }
+
   //Menu de opcoes:
   do {
     printf("=================================\n");
     printf("1- inserir registro\n");
     printf("2- buscar registro\n");
-    printf("3 - sair\n");
+    printf("3- sair\n");
     printf("=================================\n");
     scanf("%d", &option);
     clearBuffer();
